@@ -1,0 +1,789 @@
+---
+title: "Movielens Recommender System"
+author: "Aditi Gupta"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+
+# Introduction
+
+Netflix, currently the most popular streaming service in the world, launched a competition in 2006 promising $1 million in prize money for the winning team. The objective of the challenge was to create an algorithm that outperformed Netflix's baseline algorithm, Cine match, by 10%. The "Netflix Prize" contest highlighted the significance and financial benefits of research focused on improving existing recommendation systems, with companies such as social media firm Twitter hosting similar competitions of their own.
+
+In the HarvardX: PH125.9x Data Science: Capstone course, an objective comparable to the "Netflix Prize" contest is presented to participants, albeit with the use of a different dataset. Rather than the datasets provided by Netflix, the 10M version of the MovieLens dataset provided by the research lab GroupLens will be used. As the name suggests, the dataset contains 10 million movie ratings, as well as 100,000 tag applications applied to 10,000 movies by 72,000 users.
+
+
+## Goal of the Project
+
+The MovieLens Project is designed to encompass the various machine learning and computational concepts learned from previous courses in the HarvardX Professional Data Science Certificate program. Using the MovieLens dataset provided, the goal of the project is to train an algorithm with a RMSE score less than 0.86490.
+
+The Root Mean Square Error, or RMSE, is the value used to assess the algorithm's performance. Generally, a lower RMSE score indicates better performance, and vice versa. 
+
+The following function computes the RMSE based on predicted and observed values:
+$$ RMSE = \sqrt{\frac{1}{N}\displaystyle\sum_{u,i} (\hat{y}_{u,i}-y_{u,i})^{2}} $$
+## Project Stages
+
+
+The MovieLens project consisted of below stages, and as such, the report has been divided into these sections.
+
+1) Create edx and final_holdout_test sets 
+2) Looking at data sets structure, data type, and data.
+3) Pre-processing data
+4) Exploratory Data Analysis
+5) Modeling
+6) Model evaluation and final model fitting on final_holdout_test dataset.
+7) Conclusion
+8) Future work
+9) Thanks!
+10) References
+
+
+### 1. Create edx and final_holdout_test sets
+
+
+I used the following code to generate the datasets. And develop the algorithm using the edx set. For a final test of the final algorithm, which will predict movie ratings in the final_holdout_test set as if they were unknown. RMSE will be used to evaluate how close it's predictions are to the true values in the final_holdout_test set.
+
+
+```{r create_datasets,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+##########################################################
+# Step 1: Create edx and final_holdout_test sets 
+##########################################################
+
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(tibble)) install.packages("tibble", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(rlang)) install.packages("rlang", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
+if(!require(gplots)) install.packages("gplots", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(tibble)
+library(caret)
+library(rlang)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(gplots)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+options(timeout = 120)
+
+dl <- "ml-10M100K.zip"
+if(!file.exists(dl))
+  download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings_file <- "ml-10M100K/ratings.dat"
+if(!file.exists(ratings_file))
+  unzip(dl, ratings_file)
+
+movies_file <- "ml-10M100K/movies.dat"
+if(!file.exists(movies_file))
+  unzip(dl, movies_file)
+
+ratings <- as.data.frame(str_split(read_lines(ratings_file), fixed("::"), simplify = TRUE),
+                         stringsAsFactors = FALSE)
+colnames(ratings) <- c("userId", "movieId", "rating", "timestamp")
+ratings <- ratings %>%
+  mutate(userId = as.integer(userId),
+         movieId = as.integer(movieId),
+         rating = as.numeric(rating),
+         timestamp = as.integer(timestamp))
+
+movies <- as.data.frame(str_split(read_lines(movies_file), fixed("::"), simplify = TRUE),
+                        stringsAsFactors = FALSE)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- movies %>%
+  mutate(movieId = as.integer(movieId))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Final hold-out test set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.6 or later
+#Warning message:
+#In set.seed(1, sample.kind = "Rounding") :
+#  non-uniform 'Rounding' sampler used
+# set.seed(1) # if using R 3.5 or earlier
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in final hold-out test set are also in edx set
+final_holdout_test <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from final hold-out test set back into edx set
+removed <- anti_join(temp, final_holdout_test)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+######################################
+# End of Provided Code
+######################################
+
+```
+
+
+### 2. Looking at data sets structure, data type, and data.
+
+In this stage I was looking for missing values, columns, rows, summary of datasets "edx" and "final_holdout_test".
+
+There were no missing values in either edx or final_holdout_test, ensuring data completeness for all columns.
+edx has 9 million observations, while final_holdout_test contains 1 million observations, giving ample data for training and validation.
+
+#### 2.1 Checking for Missing Values
+
+
+```{r check_missing_values,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Check any missing value
+anyNA(edx)
+anyNA(final_holdout_test)
+```
+
+#### 2.2 Counting the number of missing values in each column
+
+
+```{r count_missing,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+sapply(edx, function(x) sum(is.na(x)))
+sapply(final_holdout_test, function(x) sum(is.na(x)))
+```
+
+#### 2.3 Checking column names with data types
+
+
+```{r col_nam_data_type,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+
+sapply(edx, class)
+sapply(final_holdout_test, class)
+```
+
+#### 2.4 Listing the amount of observations and variables
+
+
+```{r shape,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+dim(edx)
+dim(final_holdout_test)
+```
+
+#### 2.5 Looking at the first few rows and stats like mean, median, min, max, 1 and 3rd Qu.of numeric columns.
+
+
+```{r stats,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+head(edx)
+summary(edx)
+
+head(final_holdout_test)
+summary(final_holdout_test)
+```
+
+
+### 3. Pre-processing data
+
+
+#### 3.1 Converting time stamp to year rated and add it to edx
+
+
+```{r extract_year_rated,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+edx <- edx %>% mutate(year_rated = year(as_datetime(timestamp)))
+```
+
+#### 3.2 Double checking any invalid value after conversion of time stamp
+
+
+```{r check_year_rated,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+unique(edx$year_rated)
+```
+
+#### 3.3 Extracting the year released from title and add it to edx
+
+
+```{r extract_year_released,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+edx <- edx %>% mutate(year_released = as.numeric(str_sub(title,-5,-2)))
+```
+
+#### 3.4 Double checking unique values of year released, looking for any invalid values
+
+
+```{r check_year_released,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+unique(edx$year_released)
+```
+
+#### 3.5 Calculating the movie age when movie was rated and adding it to edx
+
+
+```{r ages,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+edx <- edx %>% 
+  mutate(ages = pmax(as.numeric(year_rated) - as.numeric(year_released), 0))
+```
+
+#### 3.6 Double checking any invalid value of ages
+
+
+```{r validate_ages,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+unique(edx$ages)
+```
+
+#### 3.7 Replacing the values -1 and -2 with 0
+
+
+```{r replace_negatives,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+edx$ages[edx$ages == -1 | edx$ages == -2] <- 0
+
+```
+
+#### 3.8  Filtering out and displaying rows with non-finite values in the 'ages' column
+
+
+```{r check_ages,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+non_finite_ages <- edx %>%
+  filter(!is.finite(ages))
+```
+
+#### 3.9 Verifying if the replacement worked
+
+
+```{r check_ages_after_change,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+unique(edx$ages)
+```
+
+#### 3.10 Did same changes of the data pre-processing for final_holdout_test set
+
+
+```{r update_final_holdout_test,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Did same changes of the data pre-processing for final_holdout_test set
+final_holdout_test <- final_holdout_test %>% mutate(year_rated = year(as_datetime(timestamp)))
+unique(final_holdout_test$year_rated)
+
+final_holdout_test <- final_holdout_test %>% mutate(year_released = as.numeric(str_sub(title,-5,-2)))
+unique(final_holdout_test$year_released)
+
+final_holdout_test <- final_holdout_test %>% mutate(ages = as.numeric(year_rated)-as.numeric(year_released))
+# Replace the values -1 and -2 with 0
+final_holdout_test$ages[final_holdout_test$ages == -1 | final_holdout_test$ages == -2] <- 0
+
+# Verify if the replacement worked
+unique(final_holdout_test$ages)
+```
+
+#### 3.11 After changes, looking at the datasets.
+
+
+```{rfinal_check,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+head(edx)
+head(final_holdout_test)
+```
+
+#### 3.12 Counting userId and movieId in edx and final_holdout_test datasets.
+
+
+```{r count_unique,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Counting unique userId and movieId in the edx dataset
+unique_users_edx <- length(unique(edx$userId))
+unique_movies_edx <- length(unique(edx$movieId))
+
+# Counting unique userId and movieId in the final_holdout_test dataset
+unique_users_holdout <- length(unique(final_holdout_test$userId))
+unique_movies_holdout <- length(unique(final_holdout_test$movieId))
+
+# Printing the counts
+cat("Unique userId in edx:", unique_users_edx, "\n")
+cat("Unique movieId in edx:", unique_movies_edx, "\n")
+cat("Unique userId in final_holdout_test:", unique_users_holdout, "\n")
+cat("Unique movieId in final_holdout_test:", unique_movies_holdout, "\n")
+```
+
+
+### 4. Exploratory Data Analysis (EDA)
+
+
+#### 4.1 Summary Statistics
+
+
+```{r stats_again,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Summary statistics for the edx and final_holdout_test datasets
+summary(edx)
+summary(final_holdout_test)
+```
+
+#### 4.2 Slicing and dicing to look at top rating stats group by UserId, MovieId, and ages
+
+
+Insights: Popular movies like Pulp Fiction and Forrest Gump have high average ratings and significant rating counts, indicating their classic status.
+The most active users rated thousands of movies, but their average ratings vary, showing diverse rating behaviors.
+
+
+```{r slice_and_dice,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Table of 5 movies rated most (sorted by number of ratings in descending order)
+top_movies <- edx %>%
+  group_by(movieId, title) %>%
+  summarize(n_rating = n(),
+            avg_rating = mean(rating),
+            max_rating = max(rating),
+            min_rating = min(rating),
+            .groups = 'drop') %>%
+  arrange(desc(n_rating)) %>%
+  distinct(movieId, .keep_all = TRUE) %>%
+  slice(1:5)
+
+# Display the table
+top_movies %>%
+  knitr::kable()
+
+# Table of 5 users who rated the most movies (sorted by number of ratings in descending order)
+top_users <- edx %>%
+  group_by(userId) %>%
+  summarize(n_ratings = n(),
+            avg_rating = mean(rating),
+            max_rating = max(rating),
+            min_rating = min(rating),
+            .groups = 'drop') %>%
+  arrange(desc(n_ratings)) %>%
+  slice(1:5)
+
+# Display the table
+top_users %>%
+  knitr::kable()
+
+# Table of 20 ages of movie who rated the most movies (sorted by number of ratings in descending order)
+top_users <- edx %>%
+  group_by(ages) %>%
+  summarize(n_ratings = n(),
+            avg_rating = mean(rating),
+            max_rating = max(rating),
+            min_rating = min(rating),
+            .groups = 'drop') %>%
+  arrange(desc(n_ratings)) %>%
+  slice(1:20)
+
+# Display the table
+top_users %>%
+  knitr::kable()
+
+```
+
+#### 4.3 Ratings Distribution
+
+
+Insights: Ratings are skewed towards higher values, with 4 being the most common, suggesting users generally rate movies positively.
+
+```{r rating_distribution,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Plotting distribution of ratings
+edx %>%
+  ggplot(aes(rating)) +
+  geom_histogram(binwidth = 0.25, fill = "blue4", color = "black") +
+  ggtitle("Distribution of Ratings") +
+  xlab("Rating") +
+  ylab("Frequency")
+
+```
+
+
+
+#### 4.4 Movie Age Distribution
+
+
+Insights: Most ratings are for newer movies (0-10 years old), with older films receiving progressively fewer ratings. This indicates a bias towards recent releases.
+
+```{r age_distribution,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Plotting distribution of movie ages
+edx %>%
+  ggplot(aes(ages)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "blue4") +
+  ggtitle("Distribution of Movie Ages") +
+  xlab("Age of Movies (Years)") +
+  ylab("Frequency")
+```
+
+
+
+#### 4.5 Average Rating per Year Released
+
+
+Insights: Movies from the late 1970s show a dip in average ratings, while older movies tend to have higher average ratings, likely because classics have endured over time.
+
+```{r avg_rating_per_year,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Line chart of average rating per year released
+edx %>%
+  group_by(year_released) %>%
+  summarize(avg_rating = mean(rating, na.rm = TRUE)) %>%
+  ggplot(aes(x = year_released, y = avg_rating)) +
+  geom_line(color = "blue4") +
+  geom_point(color = "red") +
+  labs(title = "Average Rating per Year Released",
+       x = "Year Released", 
+       y = "Average Rating")
+
+```
+
+
+
+#### 4.6 Number of Ratings per Movie
+
+
+Insights: A few popular movies receive thousands of ratings, while most movies have under 100, reflecting the “long tail” of movie popularity.
+
+```{r no_rating_per_movie,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Plotting number of ratings per movie
+edx %>%
+  count(movieId) %>%
+  ggplot(aes(n)) +
+  geom_histogram(bins = 30, color = "blue4") +
+  scale_x_log10() +
+  xlab("Number of Ratings") +
+  ylab("Number of Movies") +
+  ggtitle("Number of Ratings per Movie")
+
+```
+
+
+#### 4.7 Number of Ratings Given by Users
+
+
+Insights: Most users rate fewer than 100 movies, but a few highly active users rate thousands, highlighting varied user engagement.
+
+```{r no_rating_users,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Plotting number of ratings given by users
+edx %>%
+  count(userId) %>%
+  ggplot(aes(n)) +
+  geom_histogram(bins = 30, color = "blue4") +
+  scale_x_log10() +
+  xlab("Number of Ratings") +
+  ylab("Number of Users") +
+  ggtitle("Number of Ratings Given by Users")
+
+```
+
+
+
+#### 4.8 Correlation Analysis
+
+
+Insights: There’s a weak negative correlation between rating and movie age, suggesting older movies have slightly higher average ratings.
+
+```{r corr,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Generating a correlation matrix
+corr_matrix <- cor(edx %>%
+                     select(rating, year_rated, year_released, ages),
+                   use = "complete.obs")
+
+# Heatmap of the correlation matrix
+heatmap(corr_matrix, 
+          cellnote = round(corr_matrix, 2), 
+          notecol = "black", 
+          dendrogram = "none", 
+          trace = "none", 
+          margins = c(8, 8),
+          cexRow = 0.8, 
+          cexCol = 0.8,
+          key = TRUE,
+          density.info = "none")
+```
+
+### 4.9 User Behavior Analysis
+
+
+Insight: As users rate more movies, their average ratings tend to decrease, suggesting that more active users may adopt a more critical perspective over time or explore a broader range of movies, including lower-rated ones. This trend highlights how user engagement level can influence overall rating patterns, with high-frequency raters contributing to a slightly lower average rating across the data set.
+
+```{r user_analysis,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+#User Behavior Analysis: Ratings vs. Number of Ratings
+
+# Calculate the number of ratings and average rating per user
+user_behavior <- edx %>%
+  group_by(userId) %>%
+  summarise(num_ratings = n(), avg_rating = mean(rating))
+
+# Create a scatter plot
+ggplot(user_behavior, aes(x = num_ratings, y = avg_rating)) +
+  geom_point(color = "blue4", alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  xlab("Number of Ratings Given by User") +
+  ylab("Average Rating Given by User") +
+  ggtitle("User Behavior Analysis: Ratings vs. Number of Ratings") +
+  scale_x_log10() +
+  theme_minimal()
+```
+
+
+### 5. Modeling
+
+We explore different models to predict user ratings.
+
+#### 5.1 Naive Model
+
+
+Insights: The Naive Model has the highest RMSE (1.06), which improves with each subsequent model.
+
+```{r naive_model,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+#First, let's split the edx dataset into training and test sets for model development. We'll reserve final_holdout_test for the final evaluation step only.
+
+# Split the edx data into training and test sets (80/20 split)
+set.seed(1)  # For reproducibility
+train_index <- createDataPartition(edx$rating, times = 1, p = 0.8, list = FALSE)
+train_set <- edx[train_index, ]
+test_set <- edx[-train_index, ]
+
+# Ensure that the test set only contains users and movies from the training set
+test_set <- test_set %>%
+  semi_join(train_set, by = "movieId") %>%
+  semi_join(train_set, by = "userId")
+
+# Compute the mean rating (mu) from the training set
+mu <- mean(train_set$rating)
+
+# Test results based on simple prediction using the training/test split
+naive_rmse <- RMSE(test_set$rating, mu)
+
+# Save prediction into data frame
+rmse_results <- data_frame(method = "Naive Model", RMSE = naive_rmse)
+rmse_results %>% knitr::kable()
+
+```
+
+#### 5.2 Movie Effect Model
+
+
+Insights: This model improves upon the naive approach by accounting for each movie's specific average deviation from the overall mean rating, achieving a lower RMSE than the naive model. However, it does not yet consider user-specific preferences.
+
+```{r movie_effect,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+movie_effects <- train_set %>%
+  group_by(movieId) %>%
+  summarize(b_m = mean(rating - mu))
+
+# Plot the distribution of the movie effect (b_m)
+movie_effects %>%
+  ggplot(aes(x = b_m)) +
+  geom_histogram(bins = 10, color = "blue4", fill = "skyblue") +
+  labs(title = "Distribution of Movie Effects (b_m)",
+       x = "Movie Effect (b_m)",
+       y = "Number of Movies")
+
+# Test and save RMSE results on the test set
+predicted_ratings <- test_set %>%
+  left_join(movie_effects, by='movieId') %>%
+  mutate(prediction = mu + b_m) %>%
+  pull(prediction)
+
+model_1_rmse <- RMSE(predicted_ratings, test_set$rating)
+
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method = "Movie Effect Model",  
+                                     RMSE = model_1_rmse))
+rmse_results %>% knitr::kable()
+```
+
+#### 5.3 Movie + User Effect Model
+
+
+Insights: Adding user effects captures individual rating tendencies, reducing RMSE further by personalizing predictions. This model demonstrates that incorporating both movie and user influences significantly enhances predictive accuracy.
+
+
+Notes: Regularization is a technique used in machine learning to prevent overfitting by adding a penalty to the model complexity, encouraging simpler models that generalize better to new data. This process balances the trade-off between training accuracy and the model's ability to make accurate predictions on unseen datasets.
+
+```{r movie_and_user,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# User effect (b_u): Calculate the user effect from the training set
+user_effects <- train_set %>%
+  left_join(movie_effects, by = 'movieId') %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(rating - mu - b_m))
+
+# Plot the distribution of the user effect (b_u)
+user_effects %>%
+  ggplot(aes(x = b_u)) +
+  geom_histogram(bins = 30, color = "blue4", fill = "lightblue") +
+  labs(title = "Distribution of User Effects (b_u)",
+       x = "User Effect (b_u)",
+       y = "Number of Users")
+
+# Test and save RMSE results on the test set
+predicted_ratings <- test_set %>%
+  left_join(movie_effects, by='movieId') %>%
+  left_join(user_effects, by='userId') %>%
+  mutate(prediction = mu + b_m + b_u) %>%
+  pull(prediction)
+
+model_2_rmse <- RMSE(predicted_ratings, test_set$rating)
+
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method = "Movie + User Effect Model",  
+                                     RMSE = model_2_rmse))
+rmse_results %>% knitr::kable()
+```
+
+#### 5.4. Regularized Movie + User Model
+
+
+Insights: Regularization reduces overfitting by penalizing extreme ratings, especially for movies or users with fewer ratings. This model achieves the lowest RMSE among the three, indicating that regularization improves the robustness and generalizability of the model.
+
+
+
+```{r regularized,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+lambdas <- seq(0, 10, 0.25)
+
+# Compute RMSE for each lambda
+rmses <- sapply(lambdas, function(l){
+  # Mean rating from the training set
+  mu_reg <- mean(train_set$rating)
+  
+  # Regularized movie effect (b_m_reg)
+  b_m_reg <- train_set %>%
+    group_by(movieId) %>%
+    summarize(b_m_reg = sum(rating - mu_reg) / (n() + !!l)) # Use !!l to pass lambda correctly
+  
+  # Regularized user effect (b_u_reg)
+  b_u_reg <- train_set %>%
+    left_join(b_m_reg, by = "movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u_reg = sum(rating - b_m_reg - mu_reg) / (n() + !!l)) # Use !!l to pass lambda correctly
+  
+  # Predict ratings for the test set
+  predicted_ratings <- test_set %>%
+    left_join(b_m_reg, by = "movieId") %>%
+    left_join(b_u_reg, by = "userId") %>%
+    mutate(prediction = mu_reg + b_m_reg + b_u_reg) %>%
+    pull(prediction)
+  
+  # Compute RMSE
+  return(RMSE(test_set$rating, predicted_ratings))
+})
+
+# Plot RMSE against lambdas
+qplot(lambdas, rmses) + 
+  labs(title = "RMSE vs. Lambda",
+       x = "Lambda",
+       y = "RMSE")
+
+# Find the optimal lambda (minimizing RMSE)
+lambda_optimal <- lambdas[which.min(rmses)]
+lambda_optimal
+
+# Calculate RMSE for the optimal lambda
+model_m_u_reg_rmse <- min(rmses)
+model_m_u_reg_rmse
+
+# Save RMSE results
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method = "Regularized Movie + User Effect Model",
+                                     RMSE = model_m_u_reg_rmse))
+```
+
+Results
+
+Here are the RMSE results for all models.
+
+```{r,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# RMSE Results Summary
+rmse_results %>% knitr::kable()
+```
+
+### 6. Model evaluation and final model fitting on final_holdout_test dataset.
+
+
+Insights: The final model regularized movie + user effect model, with an RMSE of 0.8648, successfully accounts for both movie and user effects, enhancing the prediction accuracy for user movie ratings.
+
+```{r,echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+######################################
+# Final Model Fitting
+######################################
+
+# Compute the mean rating on the full edx dataset
+mu_final <- mean(edx$rating)
+
+# Regularized movie effects on the full edx dataset
+b_m_final <- edx %>%
+  group_by(movieId) %>%
+  summarize(b_m_final = sum(rating - mu_final) / (n() + lambda_optimal))
+
+# Regularized user effects on the full edx dataset
+b_u_final <- edx %>%
+  left_join(b_m_final, by = "movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u_final = sum(rating - b_m_final - mu_final) / (n() + lambda_optimal))
+
+# Final predictions on the final_holdout_test dataset
+final_predicted_ratings <- final_holdout_test %>%
+  left_join(b_m_final, by = "movieId") %>%
+  left_join(b_u_final, by = "userId") %>%
+  mutate(final_prediction = mu_final + b_m_final + b_u_final) %>%
+  pull(final_prediction)
+
+# Calculate final RMSE using final_holdout_test
+final_rmse <- RMSE(final_holdout_test$rating, final_predicted_ratings)
+
+# Add final RMSE to results
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method = "Final Model (Regularization)",
+                                     RMSE = final_rmse))
+
+# Display final RMSE results
+rmse_results %>% knitr::kable()
+```
+
+### 7. Conclusion
+
+
+In this report, we explored and modeled the MovieLens dataset, applying various techniques to predict user ratings. The regularized movie + user effect model performed the best, demonstrating the importance of accounting for both movie and user preferences in recommendation systems.
+
+### 8. Future work
+ 
+#### 8.1 Genre Analysis:
+
+Add genre-specific effects to improve model accuracy, as genre preferences significantly impact ratings. Analyze genre-specific trends to uncover popular genres and their rating patterns across user demographics.
+
+#### 8.2 Temporal Dynamics:
+
+Incorporate time-based effects to capture shifts in user preferences and movie popularity over years. Examine seasonal release effects, such as holidays vs. off-season, to refine time-based predictions.
+
+#### 8.3 User Segmentation:
+
+Cluster users by rating behavior and genre preferences to enhance personalization in recommendations. Address the cold-start problem by leveraging genre and demographic data for new users or movies.
+
+#### 8.4 Enhanced Regularization Techniques:
+
+Apply Bayesian regularization to improve predictions for users or movies with limited ratings. Experiment with automated hyper parameter tuning to optimize regularization strength and model performance.
+
+#### 8.5 Collaborative Filtering:
+
+Integrate collaborative filtering to enhance predictions by identifying similarities between users or items. Explore hybrid models that combine collaborative and content-based filtering for improved accuracy.
+
+#### 8.6 Sentiment Analysis on Reviews:
+
+Use sentiment analysis on reviews (if available) to correlate user sentiment with ratings, adding predictive insights.
+ 
+### 9. Thanks!
+ 
+I am incredibly grateful to Professor Rafael Irizarry for his dedication and expertise in the HarvardX Data Science Program, which has made this journey both inspiring and deeply rewarding. I would also like to thank my peers, whose thoughtful discussions and insights have enriched my learning experience. A special thanks goes to my husband, Abhi, and my two young sons, Kian and Evan, whose boundless energy and love have been a constant source of joy and motivation, even during the most challenging moments. Thank you all for being my foundation and my greatest inspiration.
+
+### 10. References
+
+
+1) I had to upgrade the R version in between while writing the code and I have used chatgpt for debugging while fitting correct version of libraries and make my code work again.
+2) Also, I looked up at various github projects to find the right documentation structure for my project.
+3) I have also used the knowledge from another data science bootcamp (springboard) in EDA portion to know this data better.
