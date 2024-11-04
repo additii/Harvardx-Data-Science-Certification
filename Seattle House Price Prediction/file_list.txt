@@ -1,0 +1,4 @@
+1) Seattle House Price Prediction Code R Code 10KB
+2) house_price_data csv 92KB
+3) Seattle House Price Prediction rmd 18KB
+4) Seattle-House-Price-Prediction pdf 775KB
