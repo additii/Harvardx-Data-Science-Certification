@@ -33,6 +33,19 @@ Log Transformation: To normalize skewed data distributions, log transformations 
 ```{r load_preprocess_data,echo = FALSE, message = FALSE, warning = FALSE, eval = TRUE}
 
 # Loading necessary libraries
+if(!require(readr)) install.packages("readr", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(randomForest)) install.packages("randomForest", repos = "http://cran.us.r-project.org")
+if(!require(xgboost)) install.packages("xgboost", repos = "http://cran.us.r-project.org")
+if(!require(caTools)) install.packages("caTools", repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
+if(!require(Metrics)) install.packages("Metrics", repos = "http://cran.us.r-project.org")
+if(!require(e1071)) install.packages("e1071", repos = "http://cran.us.r-project.org")
+if(!require(gbm)) install.packages("gbm", repos = "http://cran.us.r-project.org")
+
+
 library(readr)
 library(caret)
 library(randomForest)
@@ -403,16 +416,20 @@ print("Final Model Performance on Test Data:")
 print(final_results)
 ```
 
-The Tuned XGBoost model achieved the lowest RMSE (0.286), indicating it was the best-performing model for predicting Seattle house prices in this study.
+Best Model: The XGBoost model achieved the lowest RMSE (0.249), demonstrating the highest predictive accuracy among all models tested.
 
-Final Model Performance: The tuned XGBoost model was further validated on the test set, yielding an RMSE of 0.286, suggesting a high predictive accuracy in forecasting log-transformed house prices.
+Final Model Performance: The tuned XGBoost model was further validated, achieving an RMSE of 0.249, indicating strong predictive power for estimating house prices based on the dataset features.
 
 # 5. Conclusion
 
-This project successfully developed a predictive model for Seattle house prices, demonstrating that advanced machine learning models like XGBoost can achieve superior accuracy compared to simpler linear regression models. The tuned XGBoost model proved to be the most effective, achieving an RMSE below the target of 0.05 for log-transformed prices. Limitations of the study include potential biases in the dataset and limited external validation. Future work could expand to include more features (e.g., neighborhood amenities) and explore additional algorithms such as neural networks for potentially improved predictive performance.
+This project successfully developed a predictive model for Seattle house prices, revealing that advanced machine learning techniques, particularly XGBoost, can provide greater accuracy over simpler linear models. The tuned XGBoost model demonstrated the best performance, achieving an RMSE below 0.25 on log-transformed prices. Limitations of this study include potential data biases and limited generalizability beyond Seattle. Future work could incorporate more contextual features (e.g., neighborhood characteristics) and explore advanced techniques such as neural networks for improved predictions.
 
 # 6. References
 
-    Dataset: Kaggle. (2024). Seattle House Price Prediction Dataset. Retrieved from Kaggle.
-    Libraries and tools: readr, caret, randomForest, xgboost, caTools, dplyr, ggplot2,
+    
+Dataset: Kaggle. (2024). Seattle House Price Prediction Dataset. Retrieved from Kaggle.
+
+https://www.kaggle.com/datasets/samuelcortinhas/house-price-prediction-seattle/data
+
+Libraries and tools: readr, caret, randomForest, xgboost, caTools, dplyr, ggplot2,
     corrplot, Metrics, e1071, gbm in R for data processing, visualization, and modeling.
